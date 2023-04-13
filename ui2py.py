@@ -13,59 +13,79 @@ import os
 '''
 
 
-def updateUi2Py(__pyuic_exe_path, __ui_files_path):
-    fileList = os.listdir(__ui_files_path)
+class Ui2Py:
+    ui_files_path = 'ui_files'
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    ui_files_path = os.path.join(current_dir, ui_files_path)
 
-    # 字典（哈希表）—— [ui文件名 : py文件名]
-    ui_py_hash = {}
+    pyuic_exe_path = 'pyuic5'
+    # 遍历环境变量 PATH 中的路径
+    for path in os.environ['PATH'].split(os.pathsep):
+        found = False
+        for ext in os.environ['PATHEXT'].split(os.pathsep) if 'PATHEXT' in os.environ else ['']:
+            # 拼接路径和命令名称
+            full_path = os.path.join(path, pyuic_exe_path + ext)
+            if os.path.exists(full_path) and os.access(path, os.X_OK):
+                # 获取所在目录
+                dir_path = os.path.dirname(full_path)
+                print(f'找到 {pyuic_exe_path} 的执行目录为：{dir_path}')
+                pyuic_exe_path = os.path.join(dir_path, pyuic_exe_path + ext.lower())
+                found = True
+                break
+        if found:
+            break
+    else:
+        raise FileNotFoundError(
+            f'找不到名为 {pyuic_exe_path} 的命令, 请检查环境变量 PATH 中是否包含了该命令的执行目录')
 
-    # 统计所有.ui文件，并记录下来
-    for file_name in fileList:
-        if file_name.endswith('.ui'):
-            ui_py_hash[file_name] = ''
+    @classmethod
+    def update_ui(cls):
+        # 先更新.ui自动转.py文件
+        fileList = os.listdir(cls.ui_files_path)
 
-    # 统计所有的.py文件，如果有对应的.ui文件，就加到哈希表中
-    for file_name in fileList:
-        if file_name.endswith('.py'):
-            # 获取文件名（无后缀）
-            file_name_without_suffix = os.path.splitext(file_name)[0]
-            # 将.py文件加到哈希表的对应.ui中去
-            ui_file_name = file_name_without_suffix[:-3] + '.ui'
-            if ui_file_name in ui_py_hash:
-                ui_py_hash[ui_file_name] = str(file_name_without_suffix + '.py')
+        # 字典（哈希表）—— [ui文件名 : py文件名]
+        ui_py_hash = {}
 
-    # 至此，已经统计完所有的[ui文件名 : py文件名]
+        # 统计所有.ui文件，并记录下来
+        for file_name in fileList:
+            if file_name.endswith('.ui'):
+                ui_py_hash[file_name] = ''
 
-    for ui_py_item in ui_py_hash.items():
-        # 取ui绝对路径名
-        ui_file_full_path = __ui_files_path + '\\' + ui_py_item[0]
-        py_file_full_path = __ui_files_path + '\\' + ui_py_item[1]
+        # 统计所有的.py文件，如果有对应的.ui文件，就加到哈希表中
+        for file_name in fileList:
+            if file_name.endswith('.py'):
+                # 获取文件名（无后缀）
+                file_name_without_suffix = os.path.splitext(file_name)[0]
+                # 将.py文件加到哈希表的对应.ui中去
+                ui_file_name = file_name_without_suffix[:-3] + '.ui'
+                if ui_file_name in ui_py_hash:
+                    ui_py_hash[ui_file_name] = str(file_name_without_suffix + '.py')
 
-        # 取ui文件名（不带后缀）
-        file_name_without_suffix = os.path.splitext(ui_py_item[0])[0]
+        # 至此，已经统计完所有的[ui文件名 : py文件名]
 
-        # 若【没有相应的.py】 或 【ui文件已经发生更新】则运行pyuic命令更新.py
-        if ui_py_item[1] == '' or os.path.getmtime(ui_file_full_path) > os.path.getmtime(py_file_full_path):
-            cmds = list()
+        for ui_py_item in ui_py_hash.items():
+            # 取ui绝对路径名
+            ui_file_full_path = os.path.join(cls.ui_files_path, ui_py_item[0])
+            py_file_full_path = os.path.join(cls.ui_files_path, ui_py_item[1])
 
-            # d:
-            cmds.append(__pyuic_exe_path[0].lower() + ':')
+            # 取ui文件名（不带后缀）
+            file_name_without_suffix = os.path.splitext(ui_py_item[0])[0]
+            py_file_name = file_name_without_suffix + '_ui.py'
 
-            # cd D:\\ProgramData\\Miniconda3\\envs\pytorch37\\Scripts
-            cmds.append('cd ' + os.path.dirname(os.path.abspath(__pyuic_exe_path)))
+            if ui_py_item[1] != '' and os.path.getmtime(ui_file_full_path) <= os.path.getmtime(py_file_full_path):
+                print(f"{py_file_name} already exists and up-to-date")
+                continue
 
+            # 若【没有相应的.py】 或 【ui文件已经发生更新】则运行pyuic命令更新.py
             # pyuic5 xxx.ui -o xxx_ui.py
-            cmds.append('pyuic5 ' + __ui_files_path + '\\' + ui_py_item[0] \
-                        + ' -o ' + __ui_files_path + '\\' + file_name_without_suffix + '_ui.py')
+            cmd = (cls.pyuic_exe_path + ' ' + ui_file_full_path + ' -o ' +
+                   os.path.join(cls.ui_files_path, py_file_name))
 
             # 执行以上的命令组合
-            print(' && '.join(cmds))
-            os.system(' && '.join(cmds))
+            print(cmd)
+            os.system(cmd)
+            print(f"update {py_file_name} success")
 
 
-    # 先更新.ui自动转.py文件
-ui_files_path = 'C:\\Users\\jeffe\\Desktop\\pyqtproject\\ui_files'
-pyuic_exe_path = 'D:\\Anocanda3\\Scripts\\pyuic5.exe'
-updateUi2Py(pyuic_exe_path, ui_files_path)
-
-# 后续再导入ui文件，确保_ui.py文件是最新的
+if __name__ == '__main__':
+    Ui2Py.update_ui()
